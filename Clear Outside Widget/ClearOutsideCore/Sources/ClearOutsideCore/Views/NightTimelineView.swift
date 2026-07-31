@@ -22,16 +22,21 @@ public enum TimelineStyle: Sendable {
 public struct NightTimelineView: View {
     let day: DayForecast
     var style: TimelineStyle
+    /// Multiplies the compact style's bar heights (and hour-label font) - lets a container
+    /// with extra vertical room (e.g. a wide widget) make the bars chunkier. No effect on
+    /// `.detailed`, which already has fixed, deliberately-sized bars.
+    var scale: CGFloat
 
-    public init(day: DayForecast, style: TimelineStyle = .detailed) {
+    public init(day: DayForecast, style: TimelineStyle = .detailed, scale: CGFloat = 1.0) {
         self.day = day
         self.style = style
+        self.scale = scale
     }
 
     private var blockWidth: CGFloat { style == .detailed ? 26 : 16 }
-    private var blockHeight: CGFloat { style == .detailed ? 44 : 22 }
-    private var sunPositionBarHeight: CGFloat { style == .detailed ? 14 : 8 }
-    private var moonBarHeight: CGFloat { style == .detailed ? 14 : 8 }
+    private var blockHeight: CGFloat { style == .detailed ? 44 : 22 * scale }
+    private var sunPositionBarHeight: CGFloat { style == .detailed ? 14 : 8 * scale }
+    private var moonBarHeight: CGFloat { style == .detailed ? 14 : 8 * scale }
     private var tickRowHeight: CGFloat { 14 }
     private var barSpacing: CGFloat { style == .detailed ? 2 : 1 }
     private var showsHourLabels: Bool { style == .detailed }
@@ -96,11 +101,19 @@ public struct NightTimelineView: View {
                     .frame(height: sunPositionBarHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 3))
                     GeometryReader { geo in
-                        HStack(spacing: 0) {
-                            ForEach(Array(moonSegments.enumerated()), id: \.offset) { _, segment in
+                        ZStack(alignment: .leading) {
+                            HStack(spacing: 0) {
+                                ForEach(Array(moonSegments.enumerated()), id: \.offset) { _, segment in
+                                    Rectangle()
+                                        .fill(segment.isUp ? Color.gray : Color.blue)
+                                        .frame(width: fractionalWidth(from: segment.start, to: segment.end, in: geo.size.width))
+                                }
+                            }
+                            if let x = compactMoonTransitOffset(in: geo.size.width) {
                                 Rectangle()
-                                    .fill(segment.isUp ? Color.gray : Color.blue)
-                                    .frame(width: fractionalWidth(from: segment.start, to: segment.end, in: geo.size.width))
+                                    .fill(Color.red)
+                                    .frame(width: 1.5)
+                                    .offset(x: x)
                             }
                         }
                     }
@@ -128,7 +141,7 @@ public struct NightTimelineView: View {
                     .frame(maxWidth: .infinity)
                     .overlay {
                         Text(String(format: "%02d", hour.hourLabel))
-                            .font(.system(size: 8, weight: .semibold))
+                            .font(.system(size: min(8 * scale, 11), weight: .semibold))
                             .foregroundStyle(.white)
                     }
                     .overlay(alignment: .trailing) {
@@ -154,6 +167,17 @@ public struct NightTimelineView: View {
         let totalDuration = rangeEnd.timeIntervalSince(rangeStart)
         guard totalDuration > 0 else { return 0 }
         return totalWidth * CGFloat(end.timeIntervalSince(start) / totalDuration)
+    }
+
+    /// x-offset of the moon's meridian transit within the compact (continuous) moon bar,
+    /// or nil if there's no transit time or it falls outside the displayed range.
+    private func compactMoonTransitOffset(in totalWidth: CGFloat) -> CGFloat? {
+        guard let transit = day.moonTransit,
+              let rangeStart = timelineHours.first?.date,
+              let lastHourStart = timelineHours.last?.date else { return nil }
+        let rangeEnd = lastHourStart.addingTimeInterval(3600)
+        guard transit > rangeStart, transit < rangeEnd else { return nil }
+        return fractionalWidth(from: rangeStart, to: transit, in: totalWidth)
     }
 
     /// Continuous moon up/down segments (mirrors `sunZoneSegments`) - a moonrise/moonset

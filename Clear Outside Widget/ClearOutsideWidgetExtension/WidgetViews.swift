@@ -72,18 +72,22 @@ struct TodayMediumView: View {
             }
 
             if let today = cache.days.first {
-                NightTimelineView(day: today, style: .compact)
+                NightTimelineView(day: today, style: .compact, scale: 1.7)
                 Spacer(minLength: 0)
                 HStack {
-                    if let illumination = today.moonIlluminationPercent {
-                        Label("\(illumination)%", systemImage: NightTimelineView.moonPhaseSymbolName(for: today))
+                    if let sunset = today.sunset {
+                        Label(sunset.formatted(date: .omitted, time: .shortened), systemImage: "sunset.fill")
+                    }
+                    if let sunrise = today.sunrise {
+                        Label(sunrise.formatted(date: .omitted, time: .shortened), systemImage: "sunrise.fill")
                     }
                     Spacer()
-                    if let avgCloud = today.averageNightCloudPercent {
-                        Text("\(Int(avgCloud))% Ø")
+                    if let illumination = today.moonIlluminationPercent {
+                        Label("\(illumination)%", systemImage: NightTimelineView.moonPhaseSymbolName(for: today))
+                            .font(.system(size: 13, weight: .medium))
                     }
                 }
-                .font(.system(size: 10))
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             }
         }

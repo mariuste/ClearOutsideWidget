@@ -1,8 +1,9 @@
 import Foundation
 
 /// Used identically by the app and the widget extension - each fetches/caches independently.
-/// Defaults to the new Open-Meteo + 7Timer + SunMoonCalculator stack; the app can pass a
-/// `ClearOutsideForecastSource` instead if the user picks the fallback source.
+/// Takes a `ForecastSourceKind` (not a raw `ForecastSource`) so its on-disk cache can be
+/// namespaced per source - otherwise switching sources could read back a still-fresh cache
+/// entry the *other* source wrote, and the UI would silently keep showing old data.
 public actor ForecastRepository {
     private let source: ForecastSource
     private let store: LocalForecastStore
@@ -10,13 +11,12 @@ public actor ForecastRepository {
     private let longitude: Double
 
     public init(
-        source: ForecastSource = SevenTimerForecastSource(),
-        store: LocalForecastStore = LocalForecastStore(),
+        sourceKind: ForecastSourceKind = .sevenTimerStack,
         latitude: Double = 48.00,
         longitude: Double = 7.85
     ) {
-        self.source = source
-        self.store = store
+        self.source = sourceKind.makeSource()
+        self.store = LocalForecastStore(namespace: sourceKind.rawValue)
         self.latitude = latitude
         self.longitude = longitude
     }

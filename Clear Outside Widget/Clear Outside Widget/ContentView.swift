@@ -19,10 +19,10 @@ struct ContentView: View {
         ForecastSourceKind(rawValue: forecastSourceKindRaw) ?? .sevenTimerStack
     }
 
-    /// Rebuilt whenever the selected source changes - the widget always uses the default
-    /// (`.sevenTimerStack`) since it has no way to read this app-only preference.
+    /// Rebuilt whenever the selected source changes - the widget has its own independent
+    /// picker (`AppIntentConfiguration`) since it can't read this app-only preference.
     private var repository: ForecastRepository {
-        ForecastRepository(source: forecastSourceKind.makeSource())
+        ForecastRepository(sourceKind: forecastSourceKind)
     }
 
     var body: some View {

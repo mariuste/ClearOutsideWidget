@@ -15,13 +15,13 @@ struct ForecastTimelineProvider: AppIntentTimelineProvider {
         if context.isPreview {
             return ForecastEntry(date: Date(), state: .placeholder)
         }
-        let repository = ForecastRepository(source: configuration.source.kind.makeSource())
+        let repository = ForecastRepository(sourceKind: configuration.source.kind)
         let state = await repository.cachedOrRefresh(maxAge: 3600)
         return ForecastEntry(date: Date(), state: state)
     }
 
     func timeline(for configuration: SelectForecastSourceIntent, in context: Context) async -> Timeline<ForecastEntry> {
-        let repository = ForecastRepository(source: configuration.source.kind.makeSource())
+        let repository = ForecastRepository(sourceKind: configuration.source.kind)
         let state = await repository.cachedOrRefresh(maxAge: 3600)
         let entry = ForecastEntry(date: Date(), state: state)
         let nextUpdate = Calendar.current.date(byAdding: .hour, value: 2, to: Date()) ?? Date().addingTimeInterval(7200)

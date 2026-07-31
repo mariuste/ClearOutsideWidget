@@ -18,7 +18,11 @@ let package = Package(
         .testTarget(
             name: "ClearOutsideCoreTests",
             dependencies: ["ClearOutsideCore"],
-            resources: [.copy("Fixtures/sample_forecast.html")]
+            resources: [
+                .copy("Fixtures/sample_forecast.html"),
+                .copy("Fixtures/sample_openmeteo.json"),
+                .copy("Fixtures/sample_7timer_astro.json")
+            ]
         )
     ]
 )

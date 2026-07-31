@@ -54,6 +54,7 @@ struct ContentView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
+            selectedDayIndex = 0
             Task { loadState = await repository.cachedOrRefresh(maxAge: 3600) }
         }
     }

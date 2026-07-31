@@ -94,25 +94,21 @@ struct ContentView: View {
 
             Section("Nächste 6 Tage") {
                 ForEach(cache.days.prefix(6), id: \.date) { day in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(germanWeekday(for: day.date))
                                 .font(.subheadline.weight(.medium))
-                            Spacer()
                             if let illumination = day.moonIlluminationPercent {
                                 Label("\(illumination)%", systemImage: NightTimelineView.moonPhaseSymbolName(for: day))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let avgCloud = day.averageNightCloudPercent {
-                                Text("\(Int(avgCloud))% Ø")
-                                    .font(.subheadline)
+                                    .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        .frame(width: 70, alignment: .leading)
+
                         NightTimelineView(day: day, style: .compact)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 2)
                 }
             }
         }

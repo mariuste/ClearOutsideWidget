@@ -6,19 +6,31 @@
 import SwiftUI
 import ClearOutsideCore
 
+/// How much chrome `NightTimelineView` shows around the three bars.
+enum TimelineStyle {
+    /// Full-size single-day view: hour numbers, sun/rise-set ticks, sun+moon caption.
+    case detailed
+    /// Small multi-row view (e.g. a 6-day list): just the three color bars, no labels.
+    case compact
+}
+
 /// Hourly sunset -> sunrise timeline in ClearOutside's own red/orange/green scheme
 /// (red = daylight or clouds, orange = clear twilight, green = clear night), with a
 /// current-time marker, a sun-position tick row above, and a moon-up/down bar below
 /// (with a marker at the moon's meridian transit).
 struct NightTimelineView: View {
     let day: DayForecast
+    var style: TimelineStyle = .detailed
 
-    private let blockWidth: CGFloat = 26
-    private let blockHeight: CGFloat = 44
-    private let sunPositionBarHeight: CGFloat = 14
-    private let moonBarHeight: CGFloat = 14
-    private let tickRowHeight: CGFloat = 14
-    private let barSpacing: CGFloat = 2
+    private var blockWidth: CGFloat { style == .detailed ? 26 : 16 }
+    private var blockHeight: CGFloat { style == .detailed ? 44 : 22 }
+    private var sunPositionBarHeight: CGFloat { style == .detailed ? 14 : 8 }
+    private var moonBarHeight: CGFloat { style == .detailed ? 14 : 8 }
+    private var tickRowHeight: CGFloat { 14 }
+    private var barSpacing: CGFloat { style == .detailed ? 2 : 1 }
+    private var showsHourLabels: Bool { style == .detailed }
+    private var showsTickRow: Bool { style == .detailed }
+    private var showsCaption: Bool { style == .detailed }
 
     private var timelineHours: [HourForecast] {
         guard let sunset = day.sunset, let sunrise = day.sunrise else { return day.hours }
@@ -41,24 +53,126 @@ struct NightTimelineView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            sunTickRow
-                .frame(width: totalWidth, height: tickRowHeight)
-
-            ZStack(alignment: .topLeading) {
-                VStack(spacing: barSpacing) {
-                    cloudDarknessBar
-                    sunPositionBar
-                    moonBar
-                }
-                moonTransitMarker
-                currentTimeLine
+            if showsTickRow {
+                sunTickRow
+                    .frame(width: totalWidth, height: tickRowHeight)
             }
-            .frame(width: totalWidth, height: combinedBarsHeight)
 
-            sunCaption
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            if style == .detailed {
+                // Fixed-width, horizontally scrollable: hour labels/dividers/markers need
+                // stable per-hour pixel widths to stay legible and correctly positioned.
+                ZStack(alignment: .topLeading) {
+                    VStack(spacing: barSpacing) {
+                        cloudDarknessBar
+                        sunPositionBar
+                        moonBar
+                    }
+                    moonTransitMarker
+                    currentTimeLine
+                }
+                .frame(width: totalWidth, height: combinedBarsHeight)
+            } else {
+                // Rating bar: genuinely hourly data, so equal-width blocks (with hour labels
+                // and dividers) that flex to fill the row still make sense. Sun/moon bars are
+                // continuous astronomical functions, so they're rendered as smooth,
+                // time-proportional segments (no hourly stepping, no dividers) via GeometryReader.
+                VStack(spacing: barSpacing) {
+                    compactRatingBar
+                    GeometryReader { geo in
+                        HStack(spacing: 0) {
+                            ForEach(Array(sunZoneSegments.enumerated()), id: \.offset) { _, segment in
+                                Rectangle()
+                                    .fill(sunZoneColor(for: segment.zone))
+                                    .frame(width: fractionalWidth(from: segment.start, to: segment.end, in: geo.size.width))
+                            }
+                        }
+                    }
+                    .frame(height: sunPositionBarHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    GeometryReader { geo in
+                        HStack(spacing: 0) {
+                            ForEach(Array(moonSegments.enumerated()), id: \.offset) { _, segment in
+                                Rectangle()
+                                    .fill(segment.isUp ? Color.gray : Color.blue)
+                                    .frame(width: fractionalWidth(from: segment.start, to: segment.end, in: geo.size.width))
+                            }
+                        }
+                    }
+                    .frame(height: moonBarHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            if showsCaption {
+                sunCaption
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    /// Equal-width hourly blocks (genuinely hourly-resolution data), with hour labels and
+    /// thin dividers, that flex to fill the row instead of using a fixed pixel width.
+    private var compactRatingBar: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(timelineHours.enumerated()), id: \.element.date) { index, hour in
+                Rectangle()
+                    .fill(blockColor(for: hour))
+                    .frame(maxWidth: .infinity)
+                    .overlay {
+                        Text(String(format: "%02d", hour.hourLabel))
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .overlay(alignment: .trailing) {
+                        if index < timelineHours.count - 1 {
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(width: 1)
+                        }
+                    }
+            }
+        }
+        .frame(height: blockHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    /// Width of a `[start, end)` segment as a fraction of the full displayed time range,
+    /// scaled to `totalWidth` - used to render continuous (non-hour-stepped) bars.
+    private func fractionalWidth(from start: Date, to end: Date, in totalWidth: CGFloat) -> CGFloat {
+        guard let rangeStart = timelineHours.first?.date, let lastHourStart = timelineHours.last?.date else {
+            return 0
+        }
+        let rangeEnd = lastHourStart.addingTimeInterval(3600)
+        let totalDuration = rangeEnd.timeIntervalSince(rangeStart)
+        guard totalDuration > 0 else { return 0 }
+        return totalWidth * CGFloat(end.timeIntervalSince(start) / totalDuration)
+    }
+
+    /// Continuous moon up/down segments (mirrors `sunZoneSegments`) - a moonrise/moonset
+    /// pair produces at most 3 segments across the displayed range, not one per hour.
+    private var moonSegments: [(start: Date, end: Date, isUp: Bool)] {
+        guard let rangeStart = timelineHours.first?.date, let lastHourStart = timelineHours.last?.date else {
+            return []
+        }
+        let rangeEnd = lastHourStart.addingTimeInterval(3600)
+
+        let boundaries = [day.moonrise, day.moonset]
+            .compactMap { $0 }
+            .filter { $0 > rangeStart && $0 < rangeEnd }
+            .sorted()
+
+        let points = [rangeStart] + boundaries + [rangeEnd]
+        var segments: [(start: Date, end: Date, isUp: Bool)] = []
+        for i in 0..<(points.count - 1) {
+            let start = points[i]
+            let end = points[i + 1]
+            guard end > start else { continue }
+            let midpoint = start.addingTimeInterval(end.timeIntervalSince(start) / 2)
+            segments.append((start, end, day.isMoonUp(at: midpoint)))
+        }
+        return segments
     }
 
     private var cloudDarknessBar: some View {
@@ -68,9 +182,11 @@ struct NightTimelineView: View {
                     .fill(blockColor(for: hour))
                     .frame(width: blockWidth, height: blockHeight)
                     .overlay {
-                        Text(String(format: "%02d", hour.hourLabel))
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.white)
+                        if showsHourLabels {
+                            Text(String(format: "%02d", hour.hourLabel))
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
                     }
                     .overlay(alignment: .trailing) {
                         // Thin divider between hours - skip after the last block.
@@ -195,7 +311,7 @@ struct NightTimelineView: View {
                 Label(sunrise.formatted(date: .omitted, time: .shortened), systemImage: "sunrise.fill")
             }
             if let illumination = day.moonIlluminationPercent {
-                Label("\(illumination)%", systemImage: moonPhaseSymbolName)
+                Label("\(illumination)%", systemImage: Self.moonPhaseSymbolName(for: day))
             }
         }
     }
@@ -211,9 +327,11 @@ struct NightTimelineView: View {
         "waning crescent": "moonphase.waning.crescent"
     ]
 
-    private var moonPhaseSymbolName: String {
+    /// SF Symbol name matching this day's moon phase - shared with other views (e.g. the
+    /// week overview header) so the icon mapping only lives in one place.
+    static func moonPhaseSymbolName(for day: DayForecast) -> String {
         guard let name = day.moonPhaseName?.lowercased() else { return "moon" }
-        return Self.moonPhaseSymbols[name] ?? "moon"
+        return moonPhaseSymbols[name] ?? "moon"
     }
 
     private func xOffset(for date: Date) -> CGFloat? {

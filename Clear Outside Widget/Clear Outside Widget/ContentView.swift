@@ -94,44 +94,27 @@ struct ContentView: View {
 
             Section("Nächste 6 Tage") {
                 ForEach(cache.days.prefix(6), id: \.date) { day in
-                    HStack {
-                        Text(germanWeekday(for: day.date))
-                            .frame(width: 90, alignment: .leading)
-                        ratingBar(for: day)
-                        Spacer()
-                        if let avgCloud = day.averageNightCloudPercent {
-                            Text("\(Int(avgCloud))% Ø")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(germanWeekday(for: day.date))
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            if let illumination = day.moonIlluminationPercent {
+                                Label("\(illumination)%", systemImage: NightTimelineView.moonPhaseSymbolName(for: day))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let avgCloud = day.averageNightCloudPercent {
+                                Text("\(Int(avgCloud))% Ø")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        NightTimelineView(day: day, style: .compact)
                     }
+                    .padding(.vertical, 4)
                 }
             }
-        }
-    }
-
-    private func ratingDot(_ rating: HourRating) -> some View {
-        Circle()
-            .fill(color(for: rating))
-            .frame(width: 10, height: 10)
-    }
-
-    private func ratingBar(for day: DayForecast) -> some View {
-        HStack(spacing: 2) {
-            ForEach(Array(day.nightHours.enumerated()), id: \.offset) { _, hour in
-                Rectangle()
-                    .fill(color(for: hour.rating))
-                    .frame(width: 4, height: 14)
-            }
-        }
-    }
-
-    private func color(for rating: HourRating) -> Color {
-        switch rating {
-        case .good: return .green
-        case .ok: return .orange
-        case .bad: return .red
-        case .unknown: return .gray
         }
     }
 

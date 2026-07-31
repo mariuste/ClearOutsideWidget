@@ -6,7 +6,7 @@ struct ClearOutsideWidget: Widget {
     let kind: String = "ClearOutsideWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: ForecastTimelineProvider()) { entry in
+        AppIntentConfiguration(kind: kind, intent: SelectForecastSourceIntent.self, provider: ForecastTimelineProvider()) { entry in
             ClearOutsideWidgetEntryView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }

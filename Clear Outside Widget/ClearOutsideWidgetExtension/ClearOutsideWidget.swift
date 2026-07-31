@@ -12,11 +12,11 @@ struct ClearOutsideWidget: Widget {
         }
         .configurationDisplayName("Clear Outside Forecast")
         .description("Wolken, Seeing und Transparenz für die kommenden Nächte.")
-        .supportedFamilies([.systemSmall, .systemLarge])
+        .supportedFamilies([.systemMedium, .systemLarge])
     }
 }
 
-#Preview(as: .systemSmall) {
+#Preview(as: .systemMedium) {
     ClearOutsideWidget()
 } timeline: {
     ForecastEntry(date: .now, state: .placeholder)

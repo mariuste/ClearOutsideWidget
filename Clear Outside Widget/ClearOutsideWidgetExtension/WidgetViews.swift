@@ -22,8 +22,8 @@ struct ClearOutsideWidgetEntryView: View {
     @ViewBuilder
     private func content(for cache: ForecastCache, staleAsOf: Date? = nil) -> some View {
         switch family {
-        case .systemSmall:
-            TodaySmallView(cache: cache, staleAsOf: staleAsOf)
+        case .systemMedium:
+            TodayMediumView(cache: cache, staleAsOf: staleAsOf)
         default:
             WeekLargeView(cache: cache, staleAsOf: staleAsOf)
         }
@@ -51,8 +51,8 @@ struct ClearOutsideWidgetEntryView: View {
     }
 }
 
-/// Small widget: today's night timeline (compact rating/sun/moon bars), matching the app.
-struct TodaySmallView: View {
+/// Medium widget: today's night timeline (compact rating/sun/moon bars), matching the app.
+struct TodayMediumView: View {
     let cache: ForecastCache
     var staleAsOf: Date?
 

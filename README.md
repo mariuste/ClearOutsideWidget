@@ -8,7 +8,7 @@ Eine iOS-App mit Home-Screen-Widget für das Astro-Wetter (Wolken, Dämmerung, M
 - **Widget**:
   - **Mittel**: heutige Nacht im Detail (gleiche Zeitleiste wie die App, verdichtet).
   - **Groß**: 6-Tage-Wochenübersicht.
-- **Datenquelle wählbar**: Antennen-Icon im Toolbar der App wechselt zwischen dem neuen Standard-Stack und ClearOutside als Fallback (siehe unten). Das Widget bleibt technisch bedingt immer auf dem Standard-Stack.
+- **Datenquelle wählbar**: Antennen-Icon im Toolbar der App wechselt zwischen dem neuen Standard-Stack und ClearOutside als Fallback (siehe unten). Das Widget hat dieselbe Wahl unabhängig davon über "Widget bearbeiten" (Long-Press) — ohne App Group lässt sich die App-Auswahl technisch nicht ans Widget durchreichen, daher eine eigene Einstellung pro Widget-Instanz statt einer geteilten.
 - Farbschema orientiert sich an ClearOutside selbst: Rot = Sonne oben oder Wolken, Orange = klare Dämmerung, Grün = klare Nacht; Sonnenstand-Bar in Gelb/Orange/Hellblau/Dunkelblau/Schwarz; Mond-Bar in Blau (unten) / Grau (oben) mit rotem Zenit-Strich.
 
 ## Datenquellen & Lizenzen
@@ -45,7 +45,7 @@ Clear Outside Widget/
     └── ForecastRepository.swift    # Cache-first Orchestrierung, quellenunabhängig
 ```
 
-Es gibt **kein App Group** — App und Widget-Extension holen und cachen die Vorhersage jeweils unabhängig voneinander. Das ist bewusst so, weil App Groups einen kostenpflichtigen Apple-Developer-Account erfordern; mit einem kostenlosen Account funktioniert diese Architektur ohne Einschränkung (die App läuft dann halt nur 7 Tage ohne Neuinstallation über Xcode). Die App-seitige Quellenauswahl kann aus demselben Grund nicht mit dem Widget geteilt werden — das Widget nutzt immer den Standard-Stack.
+Es gibt **kein App Group** — App und Widget-Extension holen und cachen die Vorhersage jeweils unabhängig voneinander. Das ist bewusst so, weil App Groups einen kostenpflichtigen Apple-Developer-Account erfordern; mit einem kostenlosen Account funktioniert diese Architektur ohne Einschränkung (die App läuft dann halt nur 7 Tage ohne Neuinstallation über Xcode). Die App-seitige Quellenauswahl kann aus demselben Grund nicht mit dem Widget geteilt werden — das Widget hat stattdessen seine eigene, unabhängige Auswahl über eine `AppIntentConfiguration` (`ClearOutsideWidgetExtension/ForecastSourceIntent.swift`), einstellbar per "Widget bearbeiten".
 
 ## Bauen & Testen
 
@@ -65,6 +65,6 @@ Zum Testen auf einem echten iPhone: in Xcode das eigene Team unter *Signing & Ca
 ## Bekannte Einschränkungen
 
 - Free-Account: App läuft 7 Tage, dann Re-Signing über Xcode nötig.
-- Kein App Group → App und Widget können sich nicht denselben Cache oder dieselbe Quellenauswahl teilen; das Widget bleibt immer auf dem Standard-Stack.
+- Kein App Group → App und Widget können sich nicht denselben Cache oder dieselbe Quellenauswahl teilen; das Widget hat stattdessen eine eigene, per Widget-Instanz unabhängig einstellbare Auswahl.
 - 7Timer liefert Seeing/Transparenz nur für die ersten ~3 Tage; danach fällt die Bewertung auf reine Wolken-/Niederschlagsdaten zurück (siehe `RatingHeuristic`).
 - ClearOutside-Fallback ist an das aktuelle HTML der Seite gebunden; Layoutänderungen können den Parser brechen (siehe `ClearOutsideCoreTests`).

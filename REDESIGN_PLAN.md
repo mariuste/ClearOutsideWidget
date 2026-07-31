@@ -4,7 +4,7 @@ Branch: `redesign/7timer-source`
 
 ## Warum
 
-ClearOutside.com hat keine offizielle API — wir scrapen HTML, das bei jeder Layout-Änderung der Seite bricht. ClearOutside selbst baut seine Anzeige größtenteils auf denselben öffentlichen Modelldaten auf (u. a. 7Timer/GFS). Ziel: direkt an diese Quellen andocken, SwiftSoup/HTML-Parsing komplett loswerden.
+ClearOutside.com hat keine offizielle API — wir scrapen HTML, das bei jeder Layout-Änderung der Seite bricht. ClearOutside selbst baut seine Anzeige größtenteils auf denselben öffentlichen Modelldaten auf (u. a. 7Timer/GFS). Ziel: direkt an diese Quellen andocken und sie zum **neuen Standard** machen. ClearOutside-Scraping wird **nicht gelöscht**, sondern bleibt als wählbare Fallback-Quelle in der App erhalten (siehe Abschnitt weiter unten) — SwiftSoup bleibt entsprechend eine Abhängigkeit, nur eben nicht mehr die einzige Datenquelle.
 
 ## Der neue Daten-Stack (3 Quellen statt 1 Scrape)
 
@@ -60,21 +60,42 @@ ok:   alles dazwischen
 
 Für Tage jenseits des 3-Tage-Astro-Fensters fließt Seeing/Transparency nicht ein (fehlt schlicht) — Bewertung dort basiert nur auf Wolken/Niederschlag. Sollte in der UI später erkennbar sein (z. B. dezent andere Darstellung ab Tag 4), ist aber kein Blocker für den Kern-Umbau.
 
+## Quelle in der App wählbar — ClearOutside bleibt als Fallback
+
+Neue Anforderung: ClearOutside wird **nicht gelöscht**, sondern bleibt als alternative Quelle wählbar (Dropdown in der App), falls der neue Stack mal ausfällt oder man vergleichen will. Der bisherige Scraper (`ClearOutsideClient` + `ClearOutsideParser` + SwiftSoup) bleibt also im Package, wird aber hinter eine gemeinsame Abstraktion gezogen:
+
+```swift
+public enum ForecastSourceKind: String, CaseIterable, Codable, Sendable {
+    case sevenTimerStack  // neuer Standard: Open-Meteo + 7Timer + SunCalc
+    case clearOutside     // Fallback: bestehender HTML-Scraper
+}
+
+public protocol ForecastSource: Sendable {
+    func fetch(latitude: Double, longitude: Double) async throws -> ForecastCache
+}
+```
+
+- `SevenTimerForecastSource` — orchestriert die drei neuen Clients + Merge + Rating.
+- `ClearOutsideForecastSource` — dünner Wrapper um den bestehenden `ClearOutsideClient`/`ClearOutsideParser` (unverändert, nur hinter das Protokoll gehängt).
+- `ForecastRepository` bekommt einen `ForecastSourceKind`-Parameter (Standard `.sevenTimerStack`) und wählt beim Fetch die passende Implementierung.
+
+**In der App:** Auswahl-UI (z. B. Picker/Menü im Toolbar oder eigener kleiner Einstellungs-Screen), Auswahl persistiert via `@AppStorage("forecastSourceKind")`. Wechsel der Quelle stößt sofort einen Refresh an.
+
+**Wichtige Einschränkung (kein App Group, siehe oben):** Die Auswahl lässt sich aktuell **nicht** mit dem Widget teilen — das Widget hat keinen Zugriff auf die UserDefaults der App. Vorschlag: Widget nutzt immer den neuen Standard-Stack (`.sevenTimerStack`), die Quellenauswahl wirkt sich nur auf die App aus. Eine Widget-eigene Auswahl wäre nur über eine `AppIntentConfiguration` (konfigurierbares Widget, "Widget bearbeiten" im Home Screen) möglich — das ist ein eigenständiges, größeres Stück Arbeit und hier bewusst **nicht** mit eingeplant, kann aber später ergänzt werden.
+
 ## Code-Änderungen in `ClearOutsideCore`
 
-**Entfällt:**
-- `Parsing/ClearOutsideParser.swift`, SwiftSoup-Abhängigkeit komplett (Package wird dependency-frei)
-- `Networking/ClearOutsideClient.swift`
-- HTML-Fixture + darauf basierende Parser-Tests
+**Bleibt (jetzt als Fallback-Implementierung hinter `ForecastSource`):**
+- `Parsing/ClearOutsideParser.swift`, `Networking/ClearOutsideClient.swift`, SwiftSoup-Abhängigkeit, HTML-Fixture + Parser-Tests — alles unverändert, nur neu eingeordnet als `ClearOutsideForecastSource`.
 
 **Neu:**
 - `Networking/OpenMeteoClient.swift` — Codable-Structs + `URLSession`
 - `Networking/SevenTimerClient.swift` — Codable-Structs + `URLSession`
 - `Astronomy/SunMoonCalculator.swift` — SunCalc-Port (reine Funktionen, kein I/O)
-- `Merging/ForecastMerger.swift` (oder in `ForecastRepository` integriert) — kombiniert alle drei Quellen zu `ForecastCache`
-- `RatingHeuristic.swift` — die obige Bewertungsfunktion, pur & leicht testbar
+- `Sources/SevenTimerForecastSource.swift`, `Sources/ClearOutsideForecastSource.swift`, `ForecastSource`-Protokoll + `ForecastSourceKind`-Enum
+- `RatingHeuristic.swift` — Bewertungsfunktion für den neuen Stack, pur & leicht testbar (nur für `.sevenTimerStack` nötig — ClearOutside liefert seine Bewertung wie bisher direkt mit)
 
-**Bleibt unverändert:** `Models/ForecastModels.swift` (Datenmodell + `darknessFraction`/`sunZone`/`isMoonUp` bleiben gültig), alle UI-Views (`NightTimelineView`, `ContentView`, Widget-Views), `WeekendQualityEvaluator`, `LocalForecastStore`.
+**Bleibt unverändert:** `Models/ForecastModels.swift` (Datenmodell + `darknessFraction`/`sunZone`/`isMoonUp` bleiben gültig), alle UI-Views (`NightTimelineView`, `ContentView`, Widget-Views), `LocalForecastStore`.
 
 ## Tests
 
@@ -111,7 +132,8 @@ Mit nur 3 Tagen Astro-Vorschau wäre Fr/Sa/So die meiste Zeit außerhalb des Fen
 
 1. **Clients & Fixtures**: `OpenMeteoClient`, `SevenTimerClient` + eingefrorene JSON-Antworten, reine Decode-Tests.
 2. **SunMoonCalculator**: SunCalc-Port + Referenzwert-Tests, unabhängig vom Rest.
-3. **Merge & Rating**: `ForecastMerger` + Rating-Heuristik, baut `ForecastCache` aus den drei Quellen + Fixtures aus Schritt 1+2.
-4. **Repository-Umstellung**: `ForecastRepository.refresh()` auf die drei neuen Clients umstellen, `ClearOutsideClient`/`ClearOutsideParser`/SwiftSoup entfernen.
-5. **App + Widget durchtesten**: gegen echte Daten (Simulator), prüfen dass `NightTimelineView`, Wochenübersicht, Widget unverändert funktionieren (sollten sie, da Datenmodell gleich bleibt).
-6. **README/Attribution**: Datenquellen-Abschnitt aktualisieren (Open-Meteo + 7Timer + eigene Sonnen-/Mondberechnung statt ClearOutside-Scraping).
+3. **Merge & Rating**: `SevenTimerForecastSource` + Rating-Heuristik, baut `ForecastCache` aus den drei Quellen + Fixtures aus Schritt 1+2.
+4. **Source-Abstraktion**: `ForecastSource`-Protokoll + `ForecastSourceKind` einführen, bestehenden ClearOutside-Scraper unverändert als `ClearOutsideForecastSource` dahinter hängen, `ForecastRepository` auf die Abstraktion umstellen (Standard: `.sevenTimerStack`).
+5. **Auswahl-UI in der App**: Picker/Menü + `@AppStorage`, Wechsel stößt Refresh an. Widget bleibt vorerst fest auf `.sevenTimerStack`.
+6. **App + Widget durchtesten**: gegen echte Daten (Simulator), beide Quellen einzeln durchklicken, prüfen dass `NightTimelineView`, Wochenübersicht, Widget unverändert funktionieren (sollten sie, da Datenmodell gleich bleibt).
+7. **README/Attribution**: Datenquellen-Abschnitt aktualisieren (Open-Meteo + 7Timer + eigene Sonnen-/Mondberechnung als Standard, ClearOutside als Fallback-Option erwähnt).

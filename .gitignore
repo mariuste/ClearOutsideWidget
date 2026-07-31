@@ -9,3 +9,6 @@ DerivedData/
 # Swift Package Manager
 .build/
 .swiftpm/
+
+# Generated icon/image exports (regenerate from Logo/*.svg, don't track derivatives)
+Clear Outside Widget/Logo/generated/

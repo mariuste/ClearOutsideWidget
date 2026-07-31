@@ -10,8 +10,8 @@ struct ClearOutsideWidget: Widget {
             ClearOutsideWidgetEntryView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("Clear Outside Forecast")
-        .description("Wolken, Seeing und Transparenz für die kommenden Nächte.")
+        .configurationDisplayName("Astro-Wetter")
+        .description("Mittel: heutige Nacht im Detail. Groß: Wolken, Dämmerung und Mond für die kommenden 6 Nächte.")
         .supportedFamilies([.systemMedium, .systemLarge])
     }
 }

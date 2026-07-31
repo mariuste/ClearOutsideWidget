@@ -103,14 +103,9 @@ Alle drei Quellen sind **nur für nicht-kommerzielle Nutzung** kostenlos — pas
 
 **Konsequenz fürs Design:** getrennte Cache-/Refresh-Fenster pro Quelle (Open-Meteo ~1h, 7Timer ~3–6h, SunCalc rein lokal/keine Netzabfrage) statt eines einzigen `maxAge` wie bisher — spart unnötige Requests und ist fair gegenüber beiden Diensten. README bekommt einen "Datenquellen & Lizenzen"-Abschnitt mit allen drei Nennungen.
 
-## Offener Punkt: Wochenend-Benachrichtigung
+## Entschieden: Wochenend-Benachrichtigung entfällt (vorerst)
 
-Noch nicht entschieden ("erstmal planen") — mit nur 3 Tagen Astro-Vorschau ist Fr/Sa/So meist außerhalb des Fensters. Optionen bleiben auf dem Tisch:
-1. Feature vorerst entfernen.
-2. Behalten, wirkt aber nur noch kurz vor dem Wochenende (Donnerstag/Freitag).
-3. Bewertung fürs Wochenende nur aus Cloud-Cover (Open-Meteo, immer verfügbar) statt vollem Astro-Rating ableiten — würde die Reichweite zurückgeben, auf Kosten der Genauigkeit.
-
-Entscheidung folgt, sobald der Kern-Umbau steht.
+Mit nur 3 Tagen Astro-Vorschau wäre Fr/Sa/So die meiste Zeit außerhalb des Fensters gewesen — das Feature wurde daher **komplett entfernt** (nicht nur deaktiviert): `WeekendQualityEvaluator.swift`, `BackgroundRefreshManager.swift`, die zugehörigen Tests, sowie `BGTaskSchedulerPermittedIdentifiers`/`UIBackgroundModes` aus der App-Info.plist. Kann bei Bedarf später neu gedacht werden (z. B. Option 3 aus der ursprünglichen Abwägung: Bewertung nur aus Cloud-Cover, das immer verfügbar ist).
 
 ## Etappen (analog zum bisherigen Vorgehen: klein, einzeln testbar)
 
@@ -119,5 +114,4 @@ Entscheidung folgt, sobald der Kern-Umbau steht.
 3. **Merge & Rating**: `ForecastMerger` + Rating-Heuristik, baut `ForecastCache` aus den drei Quellen + Fixtures aus Schritt 1+2.
 4. **Repository-Umstellung**: `ForecastRepository.refresh()` auf die drei neuen Clients umstellen, `ClearOutsideClient`/`ClearOutsideParser`/SwiftSoup entfernen.
 5. **App + Widget durchtesten**: gegen echte Daten (Simulator), prüfen dass `NightTimelineView`, Wochenübersicht, Widget unverändert funktionieren (sollten sie, da Datenmodell gleich bleibt).
-6. **Wochenend-Alarm**: Entscheidung treffen und umsetzen (oder entfernen).
-7. **README/Attribution**: Datenquellen-Abschnitt aktualisieren (Open-Meteo + 7Timer + eigene Sonnen-/Mondberechnung statt ClearOutside-Scraping).
+6. **README/Attribution**: Datenquellen-Abschnitt aktualisieren (Open-Meteo + 7Timer + eigene Sonnen-/Mondberechnung statt ClearOutside-Scraping).

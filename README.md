@@ -1,6 +1,6 @@
 # Clear Outside Widget
 
-Eine iOS-App mit Home-Screen-Widget, die das Astro-Wetter (Wolken, Dämmerung, Mondphase) von [clearoutside.com](https://clearoutside.com/forecast/48.00/7.85?experimental=on) für Sternengucker aufbereitet — als Tagesansicht mit stündlichem Detail und als 6-Tage-Wochenübersicht.
+Eine iOS-App mit Home-Screen-Widget für das Astro-Wetter (Wolken, Dämmerung, Mondphase) — als Tagesansicht mit stündlichem Detail und als 6-Tage-Wochenübersicht. Ursprünglich ein Aufbereiter für [clearoutside.com](https://clearoutside.com/forecast/48.00/7.85?experimental=on); seit dem Redesign holt die App die Daten standardmäßig direkt von den Quellen, auf denen auch ClearOutside selbst größtenteils aufbaut (siehe unten).
 
 ## Features
 
@@ -8,8 +8,22 @@ Eine iOS-App mit Home-Screen-Widget, die das Astro-Wetter (Wolken, Dämmerung, M
 - **Widget**:
   - **Mittel**: heutige Nacht im Detail (gleiche Zeitleiste wie die App, verdichtet).
   - **Groß**: 6-Tage-Wochenübersicht.
-- **Lokale Benachrichtigung**: informiert einmalig, sobald sich die Vorhersage fürs kommende Wochenende (Fr–So) von "nicht gut" auf "gut" ändert — läuft komplett lokal über `BGTaskScheduler` + `UNUserNotificationCenter`, kein Server nötig.
+- **Datenquelle wählbar**: Antennen-Icon im Toolbar der App wechselt zwischen dem neuen Standard-Stack und ClearOutside als Fallback (siehe unten). Das Widget bleibt technisch bedingt immer auf dem Standard-Stack.
 - Farbschema orientiert sich an ClearOutside selbst: Rot = Sonne oben oder Wolken, Orange = klare Dämmerung, Grün = klare Nacht; Sonnenstand-Bar in Gelb/Orange/Hellblau/Dunkelblau/Schwarz; Mond-Bar in Blau (unten) / Grau (oben) mit rotem Zenit-Strich.
+
+## Datenquellen & Lizenzen
+
+Standardmäßig kombiniert die App drei Quellen zu einer Vorhersage (siehe `REDESIGN_PLAN.md` für den vollen Hintergrund):
+
+| Quelle | Liefert | Auflösung/Reichweite | Lizenz/Bedingungen |
+|---|---|---|---|
+| [Open-Meteo](https://open-meteo.com/) | Wolken, Temperatur, Niederschlag, Wind, Luftfeuchte | stündlich, mehrere Tage | **CC BY 4.0** (Attribution-Pflicht), kostenlos nur für nicht-kommerzielle Nutzung |
+| [7Timer!](https://www.7timer.info/doc.php?lang=en) | Astronomisches Seeing, Transparenz, Lifted Index | 3h-Raster, 3 Tage (GFS-Modell-Eigenschaft) | kostenlos, nur nicht-kommerziell; Autor bittet um Hinweis bei Nutzung |
+| [SunCalc](https://github.com/mourner/suncalc) (nach Swift portiert, kein Netzwerk) | Sonnenauf-/-untergang, Civil/Nautical/Astro-Dämmerung, Mondauf-/-untergang, Mondphase | beliebig viele Tage, rein lokal berechnet | **BSD-2-Clause** (Copyright-Hinweis in `SunMoonCalculator.swift` erhalten) |
+
+Alle drei sind für dieses nicht-kommerzielle Hobby-Projekt (keine Werbung, keine Abos) im jeweils kostenlosen Rahmen nutzbar. Rate-Limits werden durch getrennte Cache-Fenster respektiert (Open-Meteo ~1h, 7Timer seltener, da es selbst nur 4×/Tag aktualisiert).
+
+**Fallback-Quelle:** ClearOutside.com hat keine offizielle API; der ursprüngliche HTML-Scraper (SwiftSoup-basiert) bleibt im Code erhalten und ist über das Antennen-Icon in der App wählbar, falls der neue Stack einmal ausfällt oder zum Vergleich. Er bricht bei Layout-Änderungen der Seite — daher nicht mehr der Standard.
 
 ## Architektur
 
@@ -17,22 +31,26 @@ Eine iOS-App mit Home-Screen-Widget, die das Astro-Wetter (Wolken, Dämmerung, M
 Clear Outside Widget/
 ├── Clear Outside Widget/          # App-Target (SwiftUI)
 ├── ClearOutsideWidgetExtension/    # WidgetKit-Extension
-└── ClearOutsideCore/                # Lokales Swift Package, von App + Widget geteilt
-    ├── Parsing/                    # SwiftSoup-basierter HTML-Parser für ClearOutside
-    ├── Networking/                 # URLSession-Client
+└── ClearOutsideCore/               # Lokales Swift Package, von App + Widget geteilt
+    ├── Astronomy/                  # SunMoonCalculator (SunCalc-Port, kein Netzwerk)
+    ├── Networking/                 # OpenMeteoClient, SevenTimerClient, ClearOutsideClient
+    ├── Parsing/                    # ClearOutsideParser (HTML, nur noch Fallback-Pfad)
     ├── Storage/                    # Lokaler Cache (kein App Group nötig)
     ├── Models/                     # ForecastCache, DayForecast, HourForecast, SunZone, ...
-    └── Views/                      # NightTimelineView (von App und Widget genutzt)
+    ├── Views/                      # NightTimelineView (von App und Widget genutzt)
+    ├── ForecastSource.swift        # Protokoll + ForecastSourceKind (Standard/Fallback)
+    ├── SevenTimerForecastSource.swift   # Standard: Open-Meteo + 7Timer + SunMoonCalculator
+    ├── ClearOutsideForecastSource.swift # Fallback: wrapt den HTML-Scraper
+    ├── RatingHeuristic.swift       # eigene Gut/Ok/Schlecht-Bewertung für den neuen Stack
+    └── ForecastRepository.swift    # Cache-first Orchestrierung, quellenunabhängig
 ```
 
-Es gibt **kein App Group** — App und Widget-Extension holen und cachen die Vorhersage jeweils unabhängig voneinander. Das ist bewusst so, weil App Groups einen kostenpflichtigen Apple-Developer-Account erfordern; mit einem kostenlosen Account funktioniert diese Architektur ohne Einschränkung (die App läuft dann halt nur 7 Tage ohne Neuinstallation über Xcode).
-
-Da ClearOutside.com keine offizielle API hat, wird die Vorhersage direkt aus dem HTML gescraped (SwiftSoup). Der Parser wird gegen eine echte, eingefrorene HTML-Fixture getestet (`ClearOutsideCore/Tests/ClearOutsideCoreTests/Fixtures/sample_forecast.html`) — ändert ClearOutside sein Markup, schlagen die Tests fehl und die Fixture muss aktualisiert werden.
+Es gibt **kein App Group** — App und Widget-Extension holen und cachen die Vorhersage jeweils unabhängig voneinander. Das ist bewusst so, weil App Groups einen kostenpflichtigen Apple-Developer-Account erfordern; mit einem kostenlosen Account funktioniert diese Architektur ohne Einschränkung (die App läuft dann halt nur 7 Tage ohne Neuinstallation über Xcode). Die App-seitige Quellenauswahl kann aus demselben Grund nicht mit dem Widget geteilt werden — das Widget nutzt immer den Standard-Stack.
 
 ## Bauen & Testen
 
 ```bash
-# Parser/Model-Tests (schnell, kein Netzwerk, kein Simulator nötig)
+# Parser-, Client-, Astronomie- und Merge-Tests (schnell, kein Netzwerk, kein Simulator nötig)
 cd "Clear Outside Widget/ClearOutsideCore"
 swift test
 
@@ -47,5 +65,6 @@ Zum Testen auf einem echten iPhone: in Xcode das eigene Team unter *Signing & Ca
 ## Bekannte Einschränkungen
 
 - Free-Account: App läuft 7 Tage, dann Re-Signing über Xcode nötig.
-- Kein App Group → App und Widget können sich nicht denselben Cache teilen, fetchen aber ohnehin dieselbe öffentliche URL.
-- Scraping ist an das aktuelle HTML von ClearOutside gebunden; Layoutänderungen der Seite können den Parser brechen (siehe Testhinweis oben).
+- Kein App Group → App und Widget können sich nicht denselben Cache oder dieselbe Quellenauswahl teilen; das Widget bleibt immer auf dem Standard-Stack.
+- 7Timer liefert Seeing/Transparenz nur für die ersten ~3 Tage; danach fällt die Bewertung auf reine Wolken-/Niederschlagsdaten zurück (siehe `RatingHeuristic`).
+- ClearOutside-Fallback ist an das aktuelle HTML der Seite gebunden; Layoutänderungen können den Parser brechen (siehe `ClearOutsideCoreTests`).

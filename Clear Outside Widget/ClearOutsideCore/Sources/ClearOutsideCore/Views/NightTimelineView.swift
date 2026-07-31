@@ -1,13 +1,14 @@
 //
 //  NightTimelineView.swift
-//  Clear Outside Widget
+//  ClearOutsideCore
+//
+//  Shared between the app and the widget extension.
 //
 
 import SwiftUI
-import ClearOutsideCore
 
 /// How much chrome `NightTimelineView` shows around the three bars.
-enum TimelineStyle {
+public enum TimelineStyle: Sendable {
     /// Full-size single-day view: hour numbers, sun/rise-set ticks, sun+moon caption.
     case detailed
     /// Small multi-row view (e.g. a 6-day list): just the three color bars, no labels.
@@ -18,9 +19,14 @@ enum TimelineStyle {
 /// (red = daylight or clouds, orange = clear twilight, green = clear night), with a
 /// current-time marker, a sun-position tick row above, and a moon-up/down bar below
 /// (with a marker at the moon's meridian transit).
-struct NightTimelineView: View {
+public struct NightTimelineView: View {
     let day: DayForecast
-    var style: TimelineStyle = .detailed
+    var style: TimelineStyle
+
+    public init(day: DayForecast, style: TimelineStyle = .detailed) {
+        self.day = day
+        self.style = style
+    }
 
     private var blockWidth: CGFloat { style == .detailed ? 26 : 16 }
     private var blockHeight: CGFloat { style == .detailed ? 44 : 22 }
@@ -51,7 +57,7 @@ struct NightTimelineView: View {
         blockHeight + barSpacing + sunPositionBarHeight + barSpacing
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if showsTickRow {
                 sunTickRow
@@ -329,7 +335,7 @@ struct NightTimelineView: View {
 
     /// SF Symbol name matching this day's moon phase - shared with other views (e.g. the
     /// week overview header) so the icon mapping only lives in one place.
-    static func moonPhaseSymbolName(for day: DayForecast) -> String {
+    public static func moonPhaseSymbolName(for day: DayForecast) -> String {
         guard let name = day.moonPhaseName?.lowercased() else { return "moon" }
         return moonPhaseSymbols[name] ?? "moon"
     }

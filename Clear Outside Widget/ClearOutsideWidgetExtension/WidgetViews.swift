@@ -21,21 +21,11 @@ struct ClearOutsideWidgetEntryView: View {
 
     @ViewBuilder
     private func content(for cache: ForecastCache, staleAsOf: Date? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Astro-Wetter").font(.headline)
-                Spacer()
-                if let staleAsOf {
-                    Text(staleAsOf, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            DayStripView(days: Array(cache.days.prefix(6)))
-            if family == .systemLarge, let today = cache.days.first {
-                Divider()
-                TodayHourlyDetailView(day: today)
-            }
+        switch family {
+        case .systemSmall:
+            TodaySmallView(cache: cache, staleAsOf: staleAsOf)
+        default:
+            WeekLargeView(cache: cache, staleAsOf: staleAsOf)
         }
     }
 
@@ -61,87 +51,78 @@ struct ClearOutsideWidgetEntryView: View {
     }
 }
 
-struct DayStripView: View {
-    let days: [DayForecast]
+/// Small widget: today's night timeline (compact rating/sun/moon bars), matching the app.
+struct TodaySmallView: View {
+    let cache: ForecastCache
+    var staleAsOf: Date?
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 6) {
-            ForEach(Array(days.enumerated()), id: \.offset) { _, day in
-                DaySummaryCell(day: day)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                if let today = cache.days.first {
+                    Text(today.date.formatted(.dateTime.weekday(.wide).locale(Locale(identifier: "de_DE"))))
+                        .font(.headline)
+                }
+                Spacer()
+                if let staleAsOf {
+                    Text(staleAsOf, style: .relative)
+                        .font(.system(size: 8))
+                        .foregroundStyle(.secondary)
+                }
             }
-        }
-    }
-}
 
-struct DaySummaryCell: View {
-    let day: DayForecast
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(day.date.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "de_DE"))))
-                .font(.caption2)
+            if let today = cache.days.first {
+                NightTimelineView(day: today, style: .compact)
+                Spacer(minLength: 0)
+                HStack {
+                    if let illumination = today.moonIlluminationPercent {
+                        Label("\(illumination)%", systemImage: NightTimelineView.moonPhaseSymbolName(for: today))
+                    }
+                    Spacer()
+                    if let avgCloud = today.averageNightCloudPercent {
+                        Text("\(Int(avgCloud))% Ø")
+                    }
+                }
+                .font(.system(size: 10))
                 .foregroundStyle(.secondary)
-            Circle()
-                .fill(QualityColor.color(forGoodFraction: day.goodNightFraction))
-                .frame(width: 14, height: 14)
-            if let cloud = day.averageNightCloudPercent {
-                Text("\(Int(cloud))%")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-struct TodayHourlyDetailView: View {
-    let day: DayForecast
-
-    private var relevantHours: [HourForecast] {
-        let night = day.nightHours
-        return night.isEmpty ? Array(day.hours.prefix(8)) : night
-    }
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            ForEach(Array(relevantHours.prefix(8).enumerated()), id: \.offset) { _, hour in
-                HourDetailColumn(hour: hour)
             }
         }
     }
 }
 
-struct HourDetailColumn: View {
-    let hour: HourForecast
+/// Large widget: the 6-day week overview, same compact bars as the app's week list.
+struct WeekLargeView: View {
+    let cache: ForecastCache
+    var staleAsOf: Date?
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text(String(format: "%02d", hour.hourLabel))
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
-            RoundedRectangle(cornerRadius: 2)
-                .fill(QualityColor.color(for: hour.rating))
-                .frame(width: 10, height: 18)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Astro-Wetter").font(.headline)
+                Spacer()
+                if let staleAsOf {
+                    Text(staleAsOf, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
-enum QualityColor {
-    static func color(for rating: HourRating) -> Color {
-        switch rating {
-        case .good: return .green
-        case .ok: return .orange
-        case .bad: return .red
-        case .unknown: return .gray
-        }
-    }
+            ForEach(Array(cache.days.prefix(6).enumerated()), id: \.element.date) { _, day in
+                HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(day.date.formatted(.dateTime.weekday(.abbreviated).locale(Locale(identifier: "de_DE"))))
+                            .font(.system(size: 11, weight: .medium))
+                        if let illumination = day.moonIlluminationPercent {
+                            Label("\(illumination)%", systemImage: NightTimelineView.moonPhaseSymbolName(for: day))
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(width: 46, alignment: .leading)
 
-    static func color(forGoodFraction fraction: Double) -> Color {
-        switch fraction {
-        case 0.6...: return .green
-        case 0.3..<0.6: return .yellow
-        default: return .red
+                    NightTimelineView(day: day, style: .compact)
+                }
+            }
         }
     }
 }

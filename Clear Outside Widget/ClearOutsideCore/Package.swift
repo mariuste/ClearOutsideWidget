@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "ClearOutsideCore",
-    platforms: [.iOS(.v17), .macOS(.v11)],
+    platforms: [.iOS(.v17), .macOS(.v13)],
     products: [
         .library(name: "ClearOutsideCore", targets: ["ClearOutsideCore"])
     ],

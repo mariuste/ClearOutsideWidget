@@ -12,9 +12,18 @@ struct ContentView: View {
     @State private var loadState: ForecastLoadState = .placeholder
     @State private var isRefreshing = false
     @State private var selectedDayIndex = 0
+    @AppStorage("forecastSourceKind") private var forecastSourceKindRaw = ForecastSourceKind.sevenTimerStack.rawValue
     @Environment(\.scenePhase) private var scenePhase
 
-    private let repository = ForecastRepository()
+    private var forecastSourceKind: ForecastSourceKind {
+        ForecastSourceKind(rawValue: forecastSourceKindRaw) ?? .sevenTimerStack
+    }
+
+    /// Rebuilt whenever the selected source changes - the widget has its own independent
+    /// picker (`AppIntentConfiguration`) since it can't read this app-only preference.
+    private var repository: ForecastRepository {
+        ForecastRepository(sourceKind: forecastSourceKind)
+    }
 
     var body: some View {
         NavigationStack {
@@ -35,6 +44,17 @@ struct ContentView: View {
             }
             .navigationTitle("Astro-Wetter")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        Picker("Quelle", selection: $forecastSourceKindRaw) {
+                            ForEach(ForecastSourceKind.allCases, id: \.rawValue) { kind in
+                                Text(kind.displayName).tag(kind.rawValue)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         Task { await refresh() }
@@ -56,6 +76,11 @@ struct ContentView: View {
             guard newPhase == .active else { return }
             selectedDayIndex = 0
             Task { loadState = await repository.cachedOrRefresh(maxAge: 3600) }
+        }
+        .onChange(of: forecastSourceKindRaw) { _, _ in
+            // Source switch: always fetch fresh rather than risk showing the other
+            // source's cached data (both sources share one on-disk cache slot).
+            Task { await refresh() }
         }
     }
 

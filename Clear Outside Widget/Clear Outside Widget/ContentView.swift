@@ -11,6 +11,7 @@ import ClearOutsideCore
 struct ContentView: View {
     @State private var loadState: ForecastLoadState = .placeholder
     @State private var isRefreshing = false
+    @State private var selectedDayIndex = 0
     @Environment(\.scenePhase) private var scenePhase
 
     private let repository = ForecastRepository()
@@ -82,18 +83,24 @@ struct ContentView: View {
     }
 
     private func forecastList(for cache: ForecastCache) -> some View {
-        List {
-            if let today = cache.days.first {
-                Section("Heute Nacht (\(germanWeekday(for: today.date)))") {
+        let days = Array(cache.days.prefix(6))
+        let selectedDay = days.indices.contains(selectedDayIndex) ? days[selectedDayIndex] : days.first
+
+        return List {
+            if let selectedDay {
+                Section {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        NightTimelineView(day: today)
+                        NightTimelineView(day: selectedDay)
                             .padding(.vertical, 6)
                     }
+                } header: {
+                    Text(relativeDayHeader(for: selectedDay.date, dayIndex: selectedDayIndex))
+                        .foregroundStyle(selectedDayIndex == 0 ? .secondary : Color.accentColor)
                 }
             }
 
             Section("Nächste 6 Tage") {
-                ForEach(cache.days.prefix(6), id: \.date) { day in
+                ForEach(Array(days.enumerated()), id: \.element.date) { index, day in
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(germanWeekday(for: day.date))
@@ -109,6 +116,11 @@ struct ContentView: View {
                         NightTimelineView(day: day, style: .compact)
                     }
                     .padding(.vertical, 2)
+                    .contentShape(Rectangle())
+                    .listRowBackground(index == selectedDayIndex ? Color.accentColor.opacity(0.12) : nil)
+                    .onTapGesture {
+                        selectedDayIndex = index
+                    }
                 }
             }
         }
@@ -116,6 +128,16 @@ struct ContentView: View {
 
     private func germanWeekday(for date: Date) -> String {
         date.formatted(.dateTime.weekday(.wide).locale(Locale(identifier: "de_DE")))
+    }
+
+    private func relativeDayHeader(for date: Date, dayIndex: Int) -> String {
+        let weekday = germanWeekday(for: date)
+        switch dayIndex {
+        case 0: return "Heute Nacht (\(weekday))"
+        case 1: return "Morgen Nacht (\(weekday))"
+        case 2: return "Übermorgen Nacht (\(weekday))"
+        default: return "In \(dayIndex) Tagen (\(weekday))"
+        }
     }
 }
 

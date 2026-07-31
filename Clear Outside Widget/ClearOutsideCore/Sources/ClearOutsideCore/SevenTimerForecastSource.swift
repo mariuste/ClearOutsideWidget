@@ -4,7 +4,7 @@ import Foundation
 /// (3-hour seeing/transparency, held constant across the matching hour slots, mirroring
 /// how ClearOutside itself displays 7Timer-derived metrics) + a locally computed sun/moon
 /// ephemeris (`SunMoonCalculator`) - no HTML scraping involved.
-public struct SevenTimerForecastSource: Sendable {
+public struct SevenTimerForecastSource: ForecastSource {
     private let openMeteo: OpenMeteoClient
     private let sevenTimer: SevenTimerClient
     private let calendar: Calendar
@@ -19,7 +19,12 @@ public struct SevenTimerForecastSource: Sendable {
         self.calendar = calendar
     }
 
-    public func fetch(latitude: Double, longitude: Double, days: Int = 6) async throws -> ForecastCache {
+    /// `ForecastSource` conformance - always requests the standard 6-day range.
+    public func fetch(latitude: Double, longitude: Double) async throws -> ForecastCache {
+        try await fetch(latitude: latitude, longitude: longitude, days: 6)
+    }
+
+    public func fetch(latitude: Double, longitude: Double, days: Int) async throws -> ForecastCache {
         async let weatherResponse = openMeteo.fetch(latitude: latitude, longitude: longitude, forecastDays: days + 1)
         async let astroResponse = sevenTimer.fetch(latitude: latitude, longitude: longitude)
         let (weather, astro) = try await (weatherResponse, astroResponse)

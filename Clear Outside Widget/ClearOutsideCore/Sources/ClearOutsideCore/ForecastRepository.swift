@@ -1,20 +1,30 @@
 import Foundation
 
 /// Used identically by the app and the widget extension - each fetches/caches independently.
+/// Defaults to the new Open-Meteo + 7Timer + SunMoonCalculator stack; the app can pass a
+/// `ClearOutsideForecastSource` instead if the user picks the fallback source.
 public actor ForecastRepository {
-    private let client: ClearOutsideClient
+    private let source: ForecastSource
     private let store: LocalForecastStore
+    private let latitude: Double
+    private let longitude: Double
 
-    public init(client: ClearOutsideClient = ClearOutsideClient(), store: LocalForecastStore = LocalForecastStore()) {
-        self.client = client
+    public init(
+        source: ForecastSource = SevenTimerForecastSource(),
+        store: LocalForecastStore = LocalForecastStore(),
+        latitude: Double = 48.00,
+        longitude: Double = 7.85
+    ) {
+        self.source = source
         self.store = store
+        self.latitude = latitude
+        self.longitude = longitude
     }
 
-    /// Always performs a fresh fetch + parse, and persists the result on success.
+    /// Always performs a fresh fetch, and persists the result on success.
     @discardableResult
     public func refresh() async throws -> ForecastCache {
-        let html = try await client.fetchHTML()
-        let cache = try ClearOutsideParser.parse(html: html)
+        let cache = try await source.fetch(latitude: latitude, longitude: longitude)
         try? store.save(cache)
         return cache
     }
